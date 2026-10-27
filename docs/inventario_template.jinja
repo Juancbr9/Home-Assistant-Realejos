@@ -1,0 +1,8 @@
+{# Pegar en Herramientas para desarrolladores → Plantilla y copiar el resultado #}
+{% for area in areas() %}
+## {{ area_name(area) }}
+{% for e in area_entities(area) | reject('match', 'update\.|button\.|event\.') %}- {{ e }} | {{ state_attr(e, 'friendly_name') }}
+{% endfor %}{% endfor %}
+## Sin área
+{% for s in states | rejectattr('domain', 'in', ['update', 'button', 'event', 'zone', 'sun', 'person']) if not area_id(s.entity_id) %}- {{ s.entity_id }} | {{ s.name }}
+{% endfor %}

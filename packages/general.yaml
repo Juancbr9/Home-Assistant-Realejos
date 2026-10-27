@@ -1,0 +1,3 @@
+# Paquete general. Cada fichero de esta carpeta agrupa automatizaciones,
+# scripts y ayudantes de una zona o función (salon.yaml, clima.yaml, ...).
+automation: []

@@ -1,0 +1,7 @@
+title: Casa (Móvil)
+views:
+  - title: Inicio
+    path: inicio
+    cards:
+      - type: markdown
+        content: Dashboard en construcción.
