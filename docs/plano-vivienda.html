@@ -1,0 +1,535 @@
+<title>Casa Realejos</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..800&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: una cabecera compacta, el plano a todo el ancho con zoom/arrastre, y debajo la tabla de superficies. */
+:root{
+  --bg:#eceee9; --panel:#f8f8f5; --ink:#1d2120; --muted:#5f6763; --line:#d3d7d0; --accent:#3d6b57; --accent-ink:#ffffff;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif; --body:"Archivo","Helvetica Neue",Arial,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#141716;--panel:#1c201e;--ink:#e7ebe7;--muted:#9aa49f;--line:#2e3532;--accent:#8fc1a6;--accent-ink:#0f1512;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141716;--panel:#1c201e;--ink:#e7ebe7;--muted:#9aa49f;--line:#2e3532;--accent:#8fc1a6;--accent-ink:#0f1512;color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 32px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px}
+h1{font-family:var(--display);font-stretch:112%;font-weight:800;font-size:clamp(26px,5vw,40px);letter-spacing:-.01em;margin:0;line-height:1;text-wrap:balance}
+.meta{font-size:13px;color:var(--muted);margin-top:6px;letter-spacing:.02em}
+.meta b{color:var(--ink);font-weight:600}
+.controls{display:flex;flex-wrap:wrap;gap:8px}
+button{font:600 13px var(--body);border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:999px;padding:8px 14px;cursor:pointer}
+button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.stage{position:relative;background:#2a2c2a;border-radius:14px;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.stage svg{display:block;width:100%;height:auto;aspect-ratio:1500/1340;max-width:100%;touch-action:none;cursor:grab}
+.stage svg:active{cursor:grabbing}
+.zoom{position:absolute;right:10px;bottom:10px;display:flex;flex-direction:column;gap:6px}
+.zoom button{width:38px;height:38px;padding:0;border-radius:10px;font-size:18px;background:rgba(20,22,21,.72);color:#fff;border-color:rgba(255,255,255,.18);backdrop-filter:blur(6px)}
+.compass{position:absolute;left:10px;top:10px;width:56px;height:56px;border-radius:50%;background:rgba(20,22,21,.62);display:grid;place-items:center;backdrop-filter:blur(6px)}
+.hint{font-size:12px;color:var(--muted)}
+.areas{display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.areas div{background:var(--panel);padding:10px 12px;display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.areas span:last-child{white-space:nowrap;font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.areas .tot{font-weight:700}
+.areas .tot span:last-child{color:var(--ink)}
+.note{font-size:12.5px;color:var(--muted);max-width:70ch;line-height:1.5}
+#labels text{font-family:var(--display);paint-order:stroke;stroke:rgba(255,253,248,.82);stroke-width:5px;stroke-linejoin:round}
+#labels .n{font-weight:700;font-size:17px;fill:#1f2321;font-stretch:105%}
+#labels .a{font-family:var(--mono);font-size:12.5px;fill:#4a4f4c}
+#labels .out .n{fill:#fff;stroke:rgba(0,0,0,.45)}
+#labels .out .a{fill:#eaeaea;stroke:rgba(0,0,0,.45)}
+#night,#lamps{transition:opacity .6s ease}
+@media (prefers-reduced-motion:reduce){#night,#lamps{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Casa Realejos</h1>
+      <div class="meta"><b>3 dormitorios · 2 baños</b> · solana y gran terraza descubierta · plano a escala 1:100</div>
+    </div>
+    <div class="controls" role="group" aria-label="Opciones del plano">
+      <button id="btnLabels" aria-pressed="true">Nombres y m²</button>
+      <button id="btnNight" aria-pressed="false">Modo noche</button>
+    </div>
+  </header>
+
+  <div class="stage">
+    <svg id="plan" viewBox="-40 -520 1500 1340" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" aria-label="Plano realista de la vivienda">
+      <defs>
+        <!-- Suelos -->
+        <pattern id="oak" width="240" height="40" patternUnits="userSpaceOnUse">
+          <rect x="0" y="0" width="150" height="20" fill="#c29262"/><rect x="150" y="0" width="90" height="20" fill="#b5844f"/>
+          <rect x="0" y="20" width="70" height="20" fill="#c99d6c"/><rect x="70" y="20" width="170" height="20" fill="#ba8b59"/>
+          <path d="M0 20H240M0 40H240M150 0V20M70 20V40" stroke="#7d5632" stroke-opacity=".45" stroke-width=".9"/>
+        </pattern>
+        <pattern id="porc" width="120" height="120" patternUnits="userSpaceOnUse">
+          <rect width="60" height="60" fill="#ebe7df"/><rect x="60" width="60" height="60" fill="#e6e1d7"/>
+          <rect y="60" width="60" height="60" fill="#e8e3da"/><rect x="60" y="60" width="60" height="60" fill="#ece8e1"/>
+          <path d="M0 0H120M0 60H120M0 0V120M60 0V120" stroke="#cbc4b8" stroke-width="1"/>
+        </pattern>
+        <pattern id="bath" width="60" height="60" patternUnits="userSpaceOnUse">
+          <rect width="30" height="30" fill="#dfe4e4"/><rect x="30" width="30" height="30" fill="#d8dedd"/>
+          <rect y="30" width="30" height="30" fill="#d9dfdf"/><rect x="30" y="30" width="30" height="30" fill="#e2e6e6"/>
+          <path d="M0 0H60M0 30H60M0 0V60M30 0V60" stroke="#b3bcbc" stroke-width=".8"/>
+        </pattern>
+        <pattern id="pavers" width="80" height="40" patternUnits="userSpaceOnUse">
+          <rect width="40" height="20" fill="#b9b3a8"/><rect x="40" width="40" height="20" fill="#afa99e"/>
+          <rect x="-20" y="20" width="40" height="20" fill="#bdb7ad"/><rect x="20" y="20" width="40" height="20" fill="#b3ada2"/><rect x="60" y="20" width="40" height="20" fill="#aaa499"/>
+          <path d="M0 0H80M0 20H80M0 40H80M0 0V20M40 0V20M80 0V20M20 20V40M60 20V40" stroke="#8b857a" stroke-width="1.2"/>
+        </pattern>
+        <pattern id="side" width="40" height="40" patternUnits="userSpaceOnUse">
+          <rect width="40" height="40" fill="#d6d3cd"/><path d="M0 0H40M0 20H40M0 0V40" stroke="#bdb8b0" stroke-width="1"/>
+        </pattern>
+        <pattern id="rugweave" width="8" height="8" patternUnits="userSpaceOnUse">
+          <rect width="8" height="8" fill="#cfc4b1"/><path d="M0 4H8M4 0V8" stroke="#bfb39e" stroke-width="1"/>
+        </pattern>
+
+        <!-- Texturas y sombras -->
+        <filter id="grain" x="-40" y="-520" width="1500" height="1340" filterUnits="userSpaceOnUse">
+          <feTurbulence type="fractalNoise" baseFrequency="0.004 0.11" numOctaves="3" seed="7"/>
+          <feColorMatrix values="0 0 0 0 .32  0 0 0 0 .19  0 0 0 0 .08  0 0 0 1.1 -.42"/>
+        </filter>
+        <filter id="noise" x="-40" y="-520" width="1500" height="1340" filterUnits="userSpaceOnUse">
+          <feTurbulence type="fractalNoise" baseFrequency=".75" numOctaves="2" seed="3"/>
+          <feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -.9 .62"/>
+        </filter>
+        <filter id="stain" x="-40" y="-520" width="1500" height="1340" filterUnits="userSpaceOnUse">
+          <feTurbulence type="fractalNoise" baseFrequency=".012" numOctaves="3" seed="11"/>
+          <feColorMatrix values="0 0 0 0 .1  0 0 0 0 .09  0 0 0 0 .07  0 0 0 -1.2 .75"/>
+        </filter>
+        <filter id="picon" x="-40" y="-520" width="1500" height="1340" filterUnits="userSpaceOnUse">
+          <feTurbulence type="fractalNoise" baseFrequency=".55" numOctaves="2" seed="21"/>
+          <feColorMatrix values="1.1 0 0 0 -.25  .4 .2 0 0 -.12  .3 0 .2 0 -.1  0 0 0 0 1"/>
+        </filter>
+        <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="3" dy="5" stdDeviation="4" flood-color="#1a120a" flood-opacity=".38"/></filter>
+        <filter id="shSoft" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="2" dy="3" stdDeviation="2.5" flood-color="#1a120a" flood-opacity=".28"/></filter>
+        <filter id="shBig" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="10" dy="16" stdDeviation="10" flood-color="#000" flood-opacity=".45"/></filter>
+        <filter id="wallSh" x="-5%" y="-5%" width="110%" height="110%"><feDropShadow dx="4" dy="7" stdDeviation="5" flood-color="#000" flood-opacity=".42"/></filter>
+        <filter id="blur6"><feGaussianBlur stdDeviation="6"/></filter>
+
+        <!-- Degradados -->
+        <linearGradient id="wallG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3a3d3f"/><stop offset="1" stop-color="#222426"/></linearGradient>
+        <linearGradient id="duvet" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fbfaf7"/><stop offset=".55" stop-color="#ece8e0"/><stop offset="1" stop-color="#ddd7cc"/></linearGradient>
+        <radialGradient id="pillow" cx=".45" cy=".4" r=".7"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d9d4ca"/></radialGradient>
+        <linearGradient id="fabric" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6f7a78"/><stop offset="1" stop-color="#4f5957"/></linearGradient>
+        <radialGradient id="cushion" cx=".5" cy=".4" r=".75"><stop offset="0" stop-color="#8a9593"/><stop offset="1" stop-color="#5d6866"/></radialGradient>
+        <linearGradient id="walnut" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7a5536"/><stop offset="1" stop-color="#5a3c24"/></linearGradient>
+        <linearGradient id="lightwood" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e3cfae"/><stop offset="1" stop-color="#c9b08a"/></linearGradient>
+        <linearGradient id="quartz" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6f4ef"/><stop offset="1" stop-color="#e2ded6"/></linearGradient>
+        <linearGradient id="steel" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e9ecee"/><stop offset=".5" stop-color="#b9bfc3"/><stop offset="1" stop-color="#d5d9dc"/></linearGradient>
+        <radialGradient id="basin" cx=".5" cy=".45" r=".6"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#e9eef0"/><stop offset="1" stop-color="#c8d0d4"/></radialGradient>
+        <linearGradient id="ceramic" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#dfe4e6"/></linearGradient>
+        <linearGradient id="glass" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#bfe3f0"/><stop offset=".5" stop-color="#eaf7fc"/><stop offset="1" stop-color="#a9d5e6"/></linearGradient>
+        <linearGradient id="carBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2c3236"/><stop offset=".3" stop-color="#5b656c"/><stop offset=".5" stop-color="#7e8a91"/><stop offset=".7" stop-color="#5b656c"/><stop offset="1" stop-color="#262b2e"/></linearGradient>
+        <linearGradient id="carGlass" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1b2329"/><stop offset=".5" stop-color="#3b4a55"/><stop offset="1" stop-color="#141a1e"/></linearGradient>
+        <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff3d6" stop-opacity=".55"/><stop offset="1" stop-color="#fff3d6" stop-opacity="0"/></linearGradient>
+        <linearGradient id="sunR" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#fff3d6" stop-opacity=".5"/><stop offset="1" stop-color="#fff3d6" stop-opacity="0"/></linearGradient>
+        <radialGradient id="lamp" r=".5"><stop offset="0" stop-color="#ffd27a" stop-opacity=".95"/><stop offset=".35" stop-color="#ffb84d" stop-opacity=".45"/><stop offset="1" stop-color="#ff9e2c" stop-opacity="0"/></radialGradient>
+        <radialGradient id="leaf" cx=".35" cy=".35" r=".8"><stop offset="0" stop-color="#7fae4f"/><stop offset="1" stop-color="#2f5d22"/></radialGradient>
+        <radialGradient id="pot" cx=".4" cy=".35" r=".7"><stop offset="0" stop-color="#c8784a"/><stop offset="1" stop-color="#8a4424"/></radialGradient>
+        <radialGradient id="tableTop" cx=".4" cy=".35" r=".8"><stop offset="0" stop-color="#f4f1ea"/><stop offset="1" stop-color="#d6d0c4"/></radialGradient>
+
+        <!-- Piezas reutilizables -->
+        <g id="chair"><rect x="2" y="2" width="34" height="34" rx="6" fill="url(#lightwood)"/><rect x="2" y="2" width="8" height="34" rx="3" fill="#a88e68"/><rect x="12" y="6" width="20" height="26" rx="5" fill="#efe9de"/></g>
+        <g id="nightstand"><rect width="40" height="42" rx="3" fill="url(#walnut)"/><circle cx="20" cy="21" r="11" fill="#f4ead2"/><circle cx="20" cy="21" r="4" fill="#d4b98a"/></g>
+        <g id="toilet"><rect x="0" y="0" width="40" height="17" rx="4" fill="url(#ceramic)" stroke="#c4cbce" stroke-width="1"/><ellipse cx="20" cy="40" rx="17" ry="24" fill="url(#ceramic)" stroke="#c4cbce" stroke-width="1"/><ellipse cx="20" cy="42" rx="11" ry="16" fill="url(#basin)"/></g>
+        <g id="wardrobe" fill="none"><path d="M0 0h1" stroke="none"/></g>
+      </defs>
+
+      <!-- Calle / acera -->
+      <rect x="-40" y="739" width="1500" height="90" fill="#9c9a95"/>
+      <rect x="-40" y="739" width="1500" height="90" fill="url(#side)" opacity=".7"/>
+
+      <!-- Parcela: terraza pavimentada -->
+      <polygon id="site" points="0,-489 1427,-308 1410,739 0,739" fill="url(#pavers)"/>
+      <polygon points="0,-489 1427,-308 1410,739 0,739" filter="url(#noise)" opacity=".35"/>
+      <polygon points="0,-489 1427,-308 1410,739 0,739" filter="url(#stain)" opacity=".5"/>
+
+      <!-- Jardín de picón con buganvillas y palmeras -->
+      <polygon points="1215,5 1426,0 1411,739 1165,739" fill="#3b2420"/>
+      <polygon points="1215,5 1426,0 1411,739 1165,739" filter="url(#picon)" opacity=".55" clip-path="url(#gardenClip)"/>
+      <clipPath id="gardenClip"><polygon points="1215,5 1426,0 1411,739 1165,739"/></clipPath>
+      <polyline points="1215,5 1165,739" fill="none" stroke="#d9d3c6" stroke-width="10" filter="url(#shSoft)"/>
+      <polygon points="1292,118 1420,112 1408,732 1270,732" fill="#4a2c22" stroke="#cfc6b6" stroke-width="7" filter="url(#shSoft)"/>
+      <g id="garden"></g>
+
+      <!-- Muros de la parcela -->
+      <g fill="none" stroke="#e1dbcf" stroke-width="14" stroke-linecap="square" filter="url(#wallSh)">
+        <polyline points="-7,0 -7,-489 1427,-308 1410,739"/>
+        <polyline points="985,746 1060,746"/><polyline points="1150,746 1410,746"/>
+      </g>
+
+      <!-- Aparcamiento y coche -->
+      <g transform="translate(905,-262) rotate(-4)">
+        <rect x="-262" y="-150" width="524" height="300" fill="none" stroke="#f3f0ea" stroke-width="4" stroke-dasharray="18 12" opacity=".85"/>
+        <g filter="url(#shBig)">
+          <path d="M-222,-60 C-224,-88 -200,-92 -150,-92 L150,-92 C205,-92 225,-80 226,-50 L226,50 C225,80 205,92 150,92 L-150,92 C-200,92 -224,88 -222,60 Z" fill="url(#carBody)"/>
+        </g>
+        <rect x="-170" y="-96" width="34" height="14" rx="5" fill="#111"/><rect x="-170" y="82" width="34" height="14" rx="5" fill="#111"/>
+        <rect x="120" y="-96" width="36" height="14" rx="5" fill="#111"/><rect x="120" y="82" width="36" height="14" rx="5" fill="#111"/>
+        <path d="M-118,-74 C-90,-80 -60,-80 -48,-78 L-48,78 C-60,80 -90,80 -118,74 C-128,40 -128,-40 -118,-74Z" fill="url(#carGlass)"/>
+        <rect x="-44" y="-76" width="128" height="152" rx="16" fill="#3f4a51"/>
+        <path d="M88,-72 L132,-66 C138,-30 138,30 132,66 L88,72 Z" fill="url(#carGlass)"/>
+        <path d="M-206,-70 L-196,-58 M-206,70 L-196,58" stroke="#f4f4f4" stroke-width="7" stroke-linecap="round"/>
+        <rect x="214" y="-70" width="8" height="24" rx="3" fill="#a0151b"/><rect x="214" y="46" width="8" height="24" rx="3" fill="#a0151b"/>
+        <path d="M-60,-92 l-6,-14 l18,0 z M-60,92 l-6,14 l18,0 z" fill="#3a4247"/>
+        <path d="M-210,-30 Q-150,-36 -122,-40 M-210,30 Q-150,36 -122,40" stroke="#ffffff" stroke-opacity=".18" stroke-width="3" fill="none"/>
+      </g>
+
+      <!-- Terraza: tumbonas y sombrilla -->
+      <g filter="url(#sh)">
+        <g transform="translate(70,-420)"><rect width="190" height="66" rx="10" fill="#f2efe8"/><rect x="2" y="4" width="54" height="58" rx="10" fill="#e1dcd2"/><path d="M60 8V58M90 8V58M120 8V58M150 8V58" stroke="#d7d1c6" stroke-width="2"/></g>
+        <g transform="translate(70,-330)"><rect width="190" height="66" rx="10" fill="#f2efe8"/><rect x="2" y="4" width="54" height="58" rx="10" fill="#e1dcd2"/><path d="M60 8V58M90 8V58M120 8V58M150 8V58" stroke="#d7d1c6" stroke-width="2"/></g>
+        <rect x="282" y="-372" width="44" height="44" rx="6" fill="url(#lightwood)"/>
+      </g>
+      <g opacity=".93" filter="url(#shBig)">
+        <circle cx="330" cy="-430" r="110" fill="#efe6d4"/>
+        <path d="M330,-430 L330,-540 M330,-430 L408,-508 M330,-430 L440,-430 M330,-430 L408,-352 M330,-430 L330,-320 M330,-430 L252,-352 M330,-430 L220,-430 M330,-430 L252,-508" stroke="#d6caB2" stroke-width="2.5"/>
+        <circle cx="330" cy="-430" r="7" fill="#b9a988"/>
+      </g>
+
+      <!-- Solana: mesa redonda junto al salón -->
+      <g filter="url(#sh)">
+        <use href="#chair" transform="translate(1072,365) rotate(90) translate(-18,-18)"/>
+        <use href="#chair" transform="translate(1072,495) rotate(-90) translate(-18,-18)"/>
+        <use href="#chair" transform="translate(1007,430) translate(-18,-18)"/>
+        <use href="#chair" transform="translate(1137,430) rotate(180) translate(-18,-18)"/>
+        <circle cx="1072" cy="430" r="48" fill="url(#tableTop)"/>
+      </g>
+
+      <!-- Interior de la vivienda -->
+      <g id="house">
+        <rect x="25" y="25" width="935" height="689" fill="url(#porc)"/>
+        <!-- madera en dormitorios y vestidor -->
+        <clipPath id="woodClip"><rect x="25" y="25" width="264" height="470"/><rect x="289" y="25" width="209" height="299"/><rect x="498" y="25" width="210" height="324"/></clipPath>
+        <g clip-path="url(#woodClip)"><rect x="25" y="25" width="690" height="480" fill="url(#oak)"/><rect x="25" y="25" width="690" height="480" filter="url(#grain)" opacity=".75"/></g>
+        <!-- baños y lavadero -->
+        <rect x="25" y="495" width="264" height="219" fill="url(#bath)"/>
+        <rect x="289" y="447" width="216" height="267" fill="url(#bath)"/>
+        <!-- brillo del porcelánico -->
+        <rect x="25" y="25" width="935" height="689" filter="url(#stain)" opacity=".18"/>
+
+        <!-- luz que entra por las ventanas -->
+        <g style="mix-blend-mode:screen">
+          <polygon points="60,25 200,25 250,210 110,210" fill="url(#sun)"/>
+          <polygon points="351,25 471,25 515,190 395,190" fill="url(#sun)"/>
+          <polygon points="525,25 645,25 690,190 570,190" fill="url(#sun)"/>
+          <polygon points="793,25 913,25 950,170 830,170" fill="url(#sun)"/>
+          <polygon points="960,213 960,388 790,420 790,250" fill="url(#sunR)"/>
+          <polygon points="960,558 960,698 800,730 800,590" fill="url(#sunR)"/>
+        </g>
+
+        <!-- Alfombras -->
+        <rect x="118" y="62" width="150" height="216" rx="4" fill="url(#rugweave)" filter="url(#shSoft)"/>
+        <rect x="128" y="72" width="130" height="196" rx="2" fill="none" stroke="#a89b84" stroke-width="2"/>
+        <rect x="312" y="372" width="370" height="48" rx="4" fill="#8e5d46" filter="url(#shSoft)"/>
+        <rect x="320" y="379" width="354" height="34" rx="2" fill="none" stroke="#d9b48a" stroke-width="2" stroke-dasharray="8 6"/>
+        <rect x="722" y="497" width="222" height="160" rx="6" fill="#d8d0c2" filter="url(#shSoft)"/>
+        <rect x="722" y="497" width="222" height="160" rx="6" filter="url(#noise)" opacity=".2"/>
+        <rect x="734" y="509" width="198" height="136" rx="4" fill="none" stroke="#b9ad98" stroke-width="2"/>
+        <circle cx="425" cy="190" r="40" fill="#c4b8d6" opacity=".9" filter="url(#shSoft)"/>
+        <circle cx="580" cy="190" r="40" fill="#b9d0c6" opacity=".9" filter="url(#shSoft)"/>
+
+        <!-- Habitación 1 -->
+        <g filter="url(#sh)">
+          <use href="#nightstand" x="30" y="42"/><use href="#nightstand" x="30" y="255"/>
+          <g transform="translate(30,90)">
+            <rect width="205" height="162" rx="5" fill="url(#walnut)"/>
+            <rect x="10" y="4" width="192" height="154" rx="6" fill="#f3f0ea"/>
+            <rect x="70" y="2" width="133" height="158" rx="7" fill="url(#duvet)"/>
+            <rect x="70" y="2" width="20" height="158" rx="4" fill="#ffffff"/>
+            <rect x="150" y="6" width="44" height="150" rx="6" fill="#5c7466"/>
+            <path d="M156 6V156M164 6V156M172 6V156M180 6V156" stroke="#4b6155" stroke-width="1.5"/>
+            <rect x="16" y="12" width="46" height="64" rx="12" fill="url(#pillow)"/>
+            <rect x="16" y="86" width="46" height="64" rx="12" fill="url(#pillow)"/>
+            <rect x="48" y="40" width="26" height="80" rx="9" fill="#c9a87c"/>
+          </g>
+          <g transform="translate(240,40)"><circle cx="18" cy="18" r="17" fill="url(#pot)"/></g>
+        </g>
+        <g transform="translate(258,58)"><circle r="20" fill="url(#leaf)"/><circle cx="-8" cy="-6" r="10" fill="#8cc061" opacity=".6"/></g>
+
+        <!-- Vestidor -->
+        <g filter="url(#sh)">
+          <rect x="30" y="322" width="60" height="164" fill="url(#lightwood)"/>
+          <rect x="90" y="322" width="102" height="56" fill="url(#lightwood)"/>
+          <path d="M30 363H90M30 404H90M30 445H90M131 322V378M172 322V378" stroke="#a88e68" stroke-width="1.5"/>
+          <path d="M60 328V480M96 350H188" stroke="#8f7a59" stroke-width="1" stroke-dasharray="3 4"/>
+          <circle cx="170" cy="432" r="22" fill="#b9a5c9"/><circle cx="170" cy="432" r="14" fill="#c8b6d6"/>
+        </g>
+
+        <!-- Baño 2 -->
+        <g filter="url(#sh)">
+          <rect x="58" y="500" width="100" height="50" rx="4" fill="url(#lightwood)"/>
+          <ellipse cx="108" cy="522" rx="30" ry="17" fill="url(#basin)" stroke="#c8d0d4"/>
+          <circle cx="108" cy="507" r="3.5" fill="#9aa3a8"/>
+          <use href="#toilet" transform="translate(125,714) rotate(180)"/>
+          <rect x="182" y="612" width="102" height="102" fill="#eef1f2"/>
+          <path d="M187 617H279V709H187Z" fill="none" stroke="#c7cfd2" stroke-width="2"/>
+          <circle cx="233" cy="663" r="6" fill="#aab3b8"/><circle cx="233" cy="663" r="2.5" fill="#6d777c"/>
+        </g>
+        <path d="M182 612V714M182 612H230" stroke="#a9d5e6" stroke-width="3" opacity=".9"/>
+        <rect x="40" y="640" width="36" height="58" rx="3" fill="#7fa9b3" opacity=".75" filter="url(#shSoft)"/>
+
+        <!-- Habitación 2 -->
+        <g filter="url(#sh)">
+          <use href="#nightstand" x="395" y="30"/>
+          <g transform="translate(392,30) rotate(90)">
+            <rect width="195" height="94" rx="4" fill="url(#lightwood)"/>
+            <rect x="6" y="4" width="186" height="86" rx="5" fill="#f3f0ea"/>
+            <rect x="60" y="2" width="133" height="90" rx="6" fill="#d6c7e3"/>
+            <rect x="60" y="2" width="16" height="90" rx="4" fill="#f7f4fb"/>
+            <rect x="12" y="14" width="44" height="64" rx="12" fill="url(#pillow)"/>
+          </g>
+          <rect x="300" y="262" width="96" height="54" fill="url(#lightwood)"/>
+          <path d="M348 262V316" stroke="#a88e68" stroke-width="1.5"/>
+          <rect x="440" y="110" width="48" height="110" rx="3" fill="url(#walnut)"/>
+          <rect x="452" y="140" width="22" height="16" rx="2" fill="#2d3134"/>
+          <use href="#chair" transform="translate(402,148)"/>
+        </g>
+
+        <!-- Habitación 3 -->
+        <g filter="url(#sh)">
+          <use href="#nightstand" x="563" y="30"/>
+          <g transform="translate(700,30) rotate(90)">
+            <rect width="195" height="94" rx="4" fill="url(#lightwood)"/>
+            <rect x="6" y="4" width="186" height="86" rx="5" fill="#f3f0ea"/>
+            <rect x="60" y="2" width="133" height="90" rx="6" fill="#bcd6c9"/>
+            <rect x="60" y="2" width="16" height="90" rx="4" fill="#f4faf7"/>
+            <rect x="12" y="14" width="44" height="64" rx="12" fill="url(#pillow)"/>
+          </g>
+          <rect x="604" y="290" width="96" height="50" fill="url(#lightwood)"/>
+          <path d="M652 290V340" stroke="#a88e68" stroke-width="1.5"/>
+          <rect x="508" y="110" width="48" height="110" rx="3" fill="url(#walnut)"/>
+          <rect x="520" y="170" width="24" height="18" rx="2" fill="#2d3134"/>
+          <use href="#chair" transform="translate(596,186) rotate(180)"/>
+        </g>
+
+        <!-- Cocina -->
+        <g filter="url(#sh)">
+          <rect x="713" y="25" width="247" height="62" fill="url(#quartz)"/>
+          <rect x="898" y="87" width="62" height="120" fill="url(#quartz)"/>
+          <path d="M788 85H898V205" fill="none" stroke="#c9c3b7" stroke-width="3"/>
+          <rect x="713" y="25" width="75" height="68" rx="2" fill="url(#steel)"/>
+          <path d="M750 30V88" stroke="#9aa1a6" stroke-width="1.5"/>
+          <rect x="815" y="33" width="44" height="44" rx="7" fill="url(#steel)"/><rect x="820" y="38" width="34" height="34" rx="6" fill="#c8ced2"/>
+          <circle cx="837" cy="55" r="3" fill="#7d858a"/>
+          <rect x="862" y="33" width="36" height="44" rx="5" fill="#dfe3e5"/>
+          <path d="M867 40H893M867 47H893M867 54H893M867 61H893M867 68H893" stroke="#c3c9cc" stroke-width="1.5"/>
+          <rect x="903" y="104" width="52" height="84" rx="4" fill="#1b1d1f"/>
+          <g fill="none" stroke="#5a5f63" stroke-width="2"><circle cx="918" cy="124" r="9"/><circle cx="940" cy="124" r="7"/><circle cx="918" cy="166" r="7"/><circle cx="940" cy="166" r="9"/></g>
+          <circle cx="760" cy="60" r="0" fill="none"/>
+        </g>
+        <g transform="translate(750,58)"><circle r="12" fill="#7d6a4f"/><circle cx="-4" cy="-3" r="5" fill="#e0a43a"/><circle cx="4" cy="2" r="5" fill="#d0452b"/><circle cx="-1" cy="5" r="4" fill="#9cc44a"/></g>
+        <g filter="url(#sh)">
+          <use href="#chair" transform="translate(724,182)"/><use href="#chair" transform="translate(724,252)"/>
+          <use href="#chair" transform="translate(896,218) rotate(180)"/><use href="#chair" transform="translate(896,288) rotate(180)"/>
+          <rect x="765" y="166" width="92" height="140" rx="4" fill="url(#lightwood)"/>
+          <rect x="765" y="166" width="92" height="140" rx="4" filter="url(#grain)" opacity=".35"/>
+        </g>
+        <circle cx="811" cy="236" r="16" fill="#e9e2d2" opacity=".9"/><circle cx="811" cy="236" r="6" fill="#d8c8a6"/>
+
+        <!-- Salón -->
+        <g filter="url(#sh)">
+          <rect x="666" y="460" width="38" height="140" rx="3" fill="url(#walnut)"/>
+          <rect x="740" y="672" width="180" height="38" rx="3" fill="url(#walnut)"/>
+          <rect x="770" y="686" width="120" height="7" rx="2" fill="#111417"/>
+          <g transform="translate(735,395)">
+            <rect width="205" height="92" rx="12" fill="url(#fabric)"/>
+            <rect x="22" y="24" width="161" height="64" rx="8" fill="#5f6a68"/>
+            <rect x="24" y="26" width="52" height="60" rx="9" fill="url(#cushion)"/>
+            <rect x="77" y="26" width="52" height="60" rx="9" fill="url(#cushion)"/>
+            <rect x="130" y="26" width="52" height="60" rx="9" fill="url(#cushion)"/>
+            <rect x="36" y="8" width="34" height="26" rx="8" fill="#c99a5b"/>
+            <rect x="140" y="8" width="34" height="26" rx="8" fill="#e8e1d3"/>
+          </g>
+          <g transform="translate(682,515)">
+            <rect width="78" height="84" rx="12" fill="#a77b52"/>
+            <rect x="18" y="12" width="56" height="60" rx="10" fill="#c49467"/>
+          </g>
+          <rect x="785" y="535" width="104" height="62" rx="31" fill="#e9e5de"/>
+          <rect x="785" y="535" width="104" height="62" rx="31" filter="url(#stain)" opacity=".35"/>
+          <circle cx="948" cy="378" r="11" fill="#2c2f31"/>
+          <g transform="translate(700,684)"><circle r="16" fill="url(#pot)"/></g>
+        </g>
+        <circle cx="948" cy="378" r="9" fill="#f6ead0"/>
+        <g transform="translate(818,560)"><rect x="-14" y="-10" width="28" height="20" rx="3" fill="#3d4a5c"/><circle cx="34" cy="8" r="9" fill="#ffffff" opacity=".9"/><circle cx="34" cy="8" r="5" fill="#b78b5c"/></g>
+        <g transform="translate(700,684)"><circle r="22" fill="url(#leaf)"/><circle cx="-7" cy="-8" r="11" fill="#8cc061" opacity=".55"/></g>
+
+        <!-- Baño 1 -->
+        <g filter="url(#sh)">
+          <rect x="299" y="457" width="72" height="138" rx="6" fill="url(#ceramic)" stroke="#c8d0d4"/>
+          <rect x="309" y="467" width="52" height="118" rx="24" fill="url(#basin)"/>
+          <circle cx="335" cy="573" r="4" fill="#9aa3a8"/>
+          <rect x="328" y="587" width="14" height="6" rx="2" fill="#a2abb0"/>
+          <use href="#toilet" transform="translate(440,595) rotate(180)"/>
+          <rect x="452" y="528" width="48" height="66" rx="3" fill="url(#lightwood)"/>
+          <ellipse cx="473" cy="561" rx="16" ry="24" fill="url(#basin)" stroke="#c8d0d4"/>
+          <circle cx="492" cy="561" r="3" fill="#9aa3a8"/>
+        </g>
+
+        <!-- Lavadero -->
+        <g filter="url(#sh)">
+          <rect x="300" y="652" width="58" height="58" rx="4" fill="url(#ceramic)"/><rect x="308" y="660" width="42" height="40" rx="6" fill="url(#basin)"/>
+          <rect x="363" y="650" width="62" height="60" rx="5" fill="#f5f6f6"/><circle cx="394" cy="684" r="20" fill="#cfd8de" stroke="#9aa3a8" stroke-width="3"/><circle cx="388" cy="678" r="7" fill="#ffffff" opacity=".7"/>
+          <rect x="366" y="653" width="56" height="9" fill="#e3e6e7"/>
+        </g>
+
+        <!-- Recibidor -->
+        <g filter="url(#sh)"><rect x="622" y="470" width="32" height="128" rx="2" fill="url(#lightwood)"/></g>
+        <rect x="524" y="666" width="74" height="42" rx="3" fill="#6b5a46"/>
+        <rect x="528" y="670" width="66" height="34" rx="2" fill="none" stroke="#8c775d" stroke-width="2" stroke-dasharray="3 3"/>
+
+        <!-- Tabiques -->
+        <g fill="url(#wallG)" filter="url(#wallSh)">
+          <path fill-rule="evenodd" d="M0 0H985V739H0Z M25 25V714H960V25Z"/>
+          <rect x="284" y="25" width="10" height="307"/>
+          <rect x="284" y="412" width="10" height="302"/>
+          <rect x="493" y="25" width="10" height="324"/>
+          <rect x="703" y="25" width="10" height="324"/>
+          <rect x="294" y="319" width="106" height="10"/><rect x="480" y="319" width="13" height="10"/>
+          <rect x="503" y="344" width="12" height="10"/><rect x="595" y="344" width="108" height="10"/>
+          <rect x="25" y="310" width="170" height="10"/>
+          <rect x="25" y="490" width="175" height="10"/><rect x="270" y="490" width="14" height="10"/>
+          <rect x="294" y="442" width="116" height="10"/><rect x="480" y="442" width="30" height="10"/>
+          <rect x="500" y="452" width="10" height="168"/><rect x="500" y="690" width="10" height="24"/>
+          <rect x="294" y="599" width="206" height="10"/>
+          <rect x="655" y="452" width="10" height="150"/>
+        </g>
+
+        <!-- Huecos en fachada: ventanas y puertas -->
+        <g id="openings"></g>
+        <g id="doors"></g>
+      </g>
+
+      <!-- Jardinera delantera y macetas -->
+      <g id="pots"></g>
+
+      <!-- Escala -->
+      <g transform="translate(20,782)" font-family="IBM Plex Mono, monospace" font-size="15" fill="#fff">
+        <rect width="100" height="8" fill="#fff"/><rect x="100" width="100" height="8" fill="#222"/><rect x="200" width="100" height="8" fill="#fff"/>
+        <rect width="300" height="8" fill="none" stroke="#fff" stroke-width="1.5"/>
+        <text x="0" y="28">0</text><text x="96" y="28">1</text><text x="196" y="28">2</text><text x="292" y="28">3 m</text>
+      </g>
+
+      <!-- Noche -->
+      <rect id="night" x="-40" y="-520" width="1500" height="1340" fill="#0a1430" opacity="0" style="mix-blend-mode:multiply;pointer-events:none"/>
+      <g id="lamps" opacity="0" style="mix-blend-mode:screen;pointer-events:none"></g>
+
+      <!-- Etiquetas -->
+      <g id="labels" text-anchor="middle" style="pointer-events:none"></g>
+    </svg>
+    <div class="compass" aria-label="Norte">
+      <svg width="40" height="40" viewBox="-20 -20 40 40" aria-hidden="true"><g transform="rotate(149)"><path d="M0,-17 L6,4 L0,0 L-6,4Z" fill="#fff"/><path d="M0,17 L6,4 L0,0 L-6,4Z" fill="#fff" opacity=".35"/></g><text x="0" y="5" font-size="0" fill="#fff">N</text></svg>
+    </div>
+    <div class="zoom">
+      <button id="zin" aria-label="Acercar">+</button>
+      <button id="zout" aria-label="Alejar">−</button>
+      <button id="zreset" aria-label="Ver plano completo">⤢</button>
+    </div>
+  </div>
+  <div class="hint">Arrastra para moverte y pellizca (o usa la rueda) para acercar. La flecha blanca de la esquina señala el norte.</div>
+
+  <div class="areas" aria-label="Superficies útiles">
+    <div><span>Salón</span><span>11,80 m²</span></div>
+    <div><span>Habitación 1</span><span>10,15 m²</span></div>
+    <div><span>Cocina</span><span>8,28 m²</span></div>
+    <div><span>Habitación 3</span><span>6,61 m²</span></div>
+    <div><span>Habitación 2</span><span>6,16 m²</span></div>
+    <div><span>Baño 2</span><span>5,16 m²</span></div>
+    <div><span>Vestidor</span><span>3,95 m²</span></div>
+    <div><span>Recibidor</span><span>3,88 m²</span></div>
+    <div><span>Baño 1</span><span>3,36 m²</span></div>
+    <div><span>Pasillo</span><span>3,33 m²</span></div>
+    <div><span>Lavadero</span><span>2,25 m²</span></div>
+    <div><span>Terraza</span><span>71,23 m²</span></div>
+    <div class="tot"><span>Total vivienda</span><span>64,93 m²</span></div>
+  </div>
+  <p class="note">Dibujado a partir del plano acotado (lámina 5, escala 1:100) y orientado como tu plano con nombres: dormitorios arriba y entrada abajo. Las medidas y superficies son las del plano. Los muebles, colores y acabados son una propuesta orientativa.</p>
+</div>
+
+<script>
+(function(){
+  const NS="http://www.w3.org/2000/svg";
+  const el=(tag,attrs,parent)=>{const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e};
+  let seed=42; const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646};
+
+  // Ventanas y puertas exteriores
+  const op=document.getElementById("openings");
+  const winH=(x1,x2,y)=>{el("rect",{x:x1,y:y,width:x2-x1,height:25,fill:"#d9d5cd"},op);el("rect",{x:x1,y:y+9,width:x2-x1,height:7,fill:"url(#glass)",stroke:"#7e9aa5","stroke-width":1},op)};
+  const winV=(y1,y2,x)=>{el("rect",{x:x,y:y1,width:25,height:y2-y1,fill:"#d9d5cd"},op);el("rect",{x:x+9,y:y1,width:7,height:y2-y1,fill:"url(#glass)",stroke:"#7e9aa5","stroke-width":1},op)};
+  winH(60,200,0);winH(351,471,0);winH(525,645,0);winH(793,913,0);winV(213,308,960);
+  el("rect",{x:960,y:308,width:25,height:80,fill:"#cfc9be"},op);
+  el("rect",{x:960,y:558,width:25,height:140,fill:"#cfc9be"},op);
+  el("rect",{x:515,y:714,width:90,height:25,fill:"#cfc9be"},op);
+  el("rect",{x:510,y:739,width:100,height:26,fill:"#d8d2c6",filter:"url(#shSoft)"},op);
+
+  // Puertas: bisagra, largo, ángulo cerrado y abierto (grados, y hacia abajo)
+  const dg=document.getElementById("doors");
+  const door=(hx,hy,len,a0,a1,glass)=>{
+    const r=a=>a*Math.PI/180, p=a=>[hx+len*Math.cos(r(a)),hy+len*Math.sin(r(a))];
+    const [x0,y0]=p(a0),[x1,y1]=p(a1);
+    el("path",{d:`M${x0} ${y0} A${len} ${len} 0 0 ${a1>a0?1:0} ${x1} ${y1}`,fill:"none",stroke:"#5b5a55","stroke-width":1.4,"stroke-dasharray":"5 5",opacity:.7},dg);
+    el("line",{x1:hx,y1:hy,x2:x1,y2:y1,stroke:glass?"#8fb8c8":"#8a6a4a","stroke-width":glass?4:5,"stroke-linecap":"round",filter:"url(#shSoft)"},dg);
+  };
+  door(480,324,78,180,270);door(515,349,78,0,-90);door(289,332,78,90,180);
+  door(270,495,68,180,90);door(480,447,68,180,90);door(505,690,68,270,180);
+  door(605,726,90,180,270);door(960,388,80,270,180,true);
+  door(960,558,70,90,180,true);door(960,698,70,270,180,true);
+  door(1150,746,90,180,270);
+
+  // Jardín: buganvillas, palmeras y picón
+  const g=document.getElementById("garden");
+  const inPlanter=(x,y)=>{const t=(y-112)/(732-112);const xl=1292+(1270-1292)*t,xr=1420+(1408-1420)*t;return x>xl+10&&x<xr-10&&y>125&&y<725};
+  for(let i=0;i<900;i++){const x=1270+rnd()*150,y=120+rnd()*610;if(!inPlanter(x,y))continue;
+    const f=rnd();el("circle",{cx:x,cy:y,r:4+rnd()*7,fill:f<.45?["#2f5d22","#3e7030","#4f8a3a"][i%3]:["#c2185b","#d81b60","#b3123f","#e0457b","#9c1238"][i%5],opacity:.9},g)}
+  const palm=(cx,cy,R)=>{const p=el("g",{filter:"url(#sh)"},g);for(let i=0;i<11;i++){const a=i*360/11+rnd()*14;el("ellipse",{cx:cx+R*.5*Math.cos(a*Math.PI/180),cy:cy+R*.5*Math.sin(a*Math.PI/180),rx:R*.52,ry:R*.12,transform:`rotate(${a} ${cx+R*.5*Math.cos(a*Math.PI/180)} ${cy+R*.5*Math.sin(a*Math.PI/180)})`,fill:"url(#leaf)"},p)}el("circle",{cx,cy,r:R*.12,fill:"#6b5232"},p)};
+  palm(1348,250,95);palm(1340,610,85);
+  for(let i=0;i<60;i++){const x=1180+rnd()*230,y=20+rnd()*700;if(inPlanter(x,y))continue;const t=(y-5)/734,xl=1215+(1165-1215)*t;if(x<xl+8||x>1418)continue;el("circle",{cx:x,cy:y,r:1.5+rnd()*2.5,fill:rnd()<.5?"#8a8178":"#5a4a42"},g)}
+
+  // Macetas
+  const pots=document.getElementById("pots");
+  const pot=(x,y,r)=>{const p=el("g",{filter:"url(#sh)"},pots);el("circle",{cx:x,cy:y,r:r,fill:"url(#pot)"},p);for(let i=0;i<7;i++){const a=rnd()*6.28,d=rnd()*r*.6;el("circle",{cx:x+d*Math.cos(a),cy:y+d*Math.sin(a),r:r*(.45+rnd()*.35),fill:"url(#leaf)"},p)}};
+  pot(40,-30,26);pot(760,-35,24);pot(940,-35,24);pot(1010,40,22);pot(1015,700,24);pot(470,775,18);pot(650,775,18);pot(1360,-200,30);
+
+  // Lámparas para el modo noche
+  const lamps=document.getElementById("lamps");
+  [[50,63,90],[50,276,90],[415,50,110],[583,50,110],[811,236,160],[948,378,150],[830,560,170],[400,520,110],[150,600,130],[420,396,120],[575,600,110],[400,660,90],[150,420,110],[160,190,120],
+   [985,348,140],[985,628,150],[560,752,140],[853,-10,150],[1072,430,110]].forEach(([x,y,r])=>el("circle",{cx:x,cy:y,r:r,fill:"url(#lamp)"},lamps));
+
+  // Etiquetas
+  const lab=document.getElementById("labels");
+  const L=(x,y,n,a,out)=>{const t=el("g",{class:out?"out":""},lab);el("text",{x,y,class:"n"},t).textContent=n;if(a)el("text",{x,y:y+17,class:"a"},t).textContent=a};
+  L(160,292,"Habitación 1","10,15 m²");L(150,410,"Vestidor","3,95 m²");L(150,585,"Baño 2","5,16 m²");
+  L(395,245,"Habitación 2","6,16 m²");L(600,268,"Habitación 3","6,61 m²");L(845,330,"Cocina","8,28 m²");
+  L(840,625,"Salón","11,80 m²");L(440,404,"Pasillo","3,33 m²");L(430,500,"Baño 1","3,36 m²");
+  L(445,632,"Lavadero","2,25 m²");L(580,632,"Recibidor","3,88 m²");
+  L(470,-150,"Terraza","71,23 m²",true);L(1075,250,"Solana","",true);L(1345,70,"Jardín","",true);L(905,-120,"Aparcamiento","",true);
+  L(560,800,"Entrada","",true);
+
+  // Botones
+  const bl=document.getElementById("btnLabels"),bn=document.getElementById("btnNight");
+  bl.onclick=()=>{const on=bl.getAttribute("aria-pressed")!=="true";bl.setAttribute("aria-pressed",on);lab.style.display=on?"":"none"};
+  bn.onclick=()=>{const on=bn.getAttribute("aria-pressed")!=="true";bn.setAttribute("aria-pressed",on);document.getElementById("night").setAttribute("opacity",on?.72:0);lamps.setAttribute("opacity",on?1:0)};
+
+  // Zoom y desplazamiento
+  const svg=document.getElementById("plan"),base={x:-40,y:-520,w:1500,h:1340};let vb={...base};
+  const apply=()=>svg.setAttribute("viewBox",`${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  const scale=()=>{const r=svg.getBoundingClientRect();return {r,s:Math.min(r.width/vb.w,r.height/vb.h)}};
+  const toSvg=(cx,cy)=>{const {r,s}=scale();const ox=(r.width-vb.w*s)/2,oy=(r.height-vb.h*s)/2;return {x:vb.x+(cx-r.left-ox)/s,y:vb.y+(cy-r.top-oy)/s}};
+  const zoomAt=(cx,cy,f)=>{const p=toSvg(cx,cy);const nw=Math.max(180,Math.min(base.w*1.2,vb.w/f));const k=nw/vb.w;vb.x=p.x-(p.x-vb.x)*k;vb.y=p.y-(p.y-vb.y)*k;vb.w=nw;vb.h*=k;apply()};
+  const center=f=>{const r=svg.getBoundingClientRect();zoomAt(r.left+r.width/2,r.top+r.height/2,f)};
+  document.getElementById("zin").onclick=()=>center(1.4);
+  document.getElementById("zout").onclick=()=>center(1/1.4);
+  document.getElementById("zreset").onclick=()=>{vb={...base};apply()};
+  svg.addEventListener("wheel",e=>{e.preventDefault();zoomAt(e.clientX,e.clientY,e.deltaY<0?1.15:1/1.15)},{passive:false});
+  const pts=new Map();let last=null;
+  const mid=()=>{const a=[...pts.values()];return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)}};
+  svg.addEventListener("pointerdown",e=>{svg.setPointerCapture(e.pointerId);pts.set(e.pointerId,{x:e.clientX,y:e.clientY});last=pts.size===2?mid():null});
+  svg.addEventListener("pointermove",e=>{if(!pts.has(e.pointerId))return;const prev=pts.get(e.pointerId);
+    if(pts.size===1){const {s}=scale();vb.x-=(e.clientX-prev.x)/s;vb.y-=(e.clientY-prev.y)/s;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});apply();return}
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});const m=mid();if(last){const {s}=scale();vb.x-=(m.x-last.x)/s;vb.y-=(m.y-last.y)/s;if(last.d>0)zoomAt(m.x,m.y,m.d/last.d);else apply()}last=m});
+  const up=e=>{pts.delete(e.pointerId);last=pts.size===2?mid():null};
+  svg.addEventListener("pointerup",up);svg.addEventListener("pointercancel",up);
+})();
+</script>
