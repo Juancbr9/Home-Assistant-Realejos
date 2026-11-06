@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>Plano 3D Casa</title>
+<style>
+  :root{
+    --bg:#111418; --panel:rgba(22,26,32,.86); --text:#e8eaed; --muted:#9aa0a6;
+    --on:#ffb74d; --active:#4fc3f7; --off:#5f6368; --bad:#e57373;
+  }
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  body.transparent{background:transparent}
+  #app{position:fixed;inset:0}
+  #app canvas{display:block;touch-action:none}
+  .labels{position:absolute;top:0;left:0;pointer-events:none}
+
+  .room{pointer-events:auto;cursor:pointer;padding:4px 10px;border-radius:999px;
+    background:var(--panel);border:1px solid rgba(255,255,255,.08);
+    font-size:12px;font-weight:600;letter-spacing:.2px;white-space:nowrap;
+    box-shadow:0 2px 8px rgba(0,0,0,.35);transition:background .25s,color .25s}
+  .room.nolight{cursor:default;opacity:.8;font-weight:500}
+  .room.on{background:var(--on);color:#2b1a00;border-color:transparent}
+  .room.missing{border-color:var(--bad)}
+
+  .dev{pointer-events:auto;cursor:pointer;display:flex;align-items:center;gap:6px;
+    padding:4px 8px 4px 4px;border-radius:14px;background:var(--panel);
+    border:1px solid rgba(255,255,255,.08);box-shadow:0 2px 8px rgba(0,0,0,.4);
+    font-size:11px;line-height:1.15;white-space:nowrap;transition:border-color .25s}
+  .dev .ic{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;
+    font-size:15px;background:var(--off);transition:background .25s,box-shadow .25s}
+  .dev.on .ic{background:var(--active);box-shadow:0 0 12px var(--active)}
+  .dev.missing .ic{background:var(--bad)}
+  .dev small{display:block;color:var(--muted);font-size:10px}
+  body.compact .dev .txt{display:none}
+  body.compact .dev{padding:3px}
+
+  #toolbar{position:fixed;top:10px;left:10px;display:flex;gap:6px;flex-wrap:wrap;z-index:10}
+  #toolbar button{background:var(--panel);color:var(--text);border:1px solid rgba(255,255,255,.1);
+    border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;cursor:pointer}
+  #toolbar button.sel{background:var(--active);color:#00222e;border-color:transparent}
+  #status{position:fixed;bottom:8px;left:10px;font-size:11px;color:var(--muted);z-index:10}
+  #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);
+    background:var(--panel);padding:10px 16px;border-radius:12px;font-size:13px;opacity:0;
+    transition:all .25s;pointer-events:none;z-index:20;max-width:86vw;text-align:center}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}}
+</script>
+</head>
+<body>
+<div id="app"></div>
+<div id="toolbar">
+  <button data-view="3d" class="sel">3D</button>
+  <button data-view="top">Planta</button>
+  <button id="btnWalls">Paredes bajas</button>
+  <button id="btnNames">Ocultar nombres</button>
+</div>
+<div id="status"></div>
+<div id="toast"></div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+/* =====================================================================
+   CONFIGURACIÓN — edita aquí nombres, entidades y posiciones
+   Coordenadas en metros. Origen = esquina interior superior-izquierda
+   del plano (Habitación 1). x → hacia la cocina, z → hacia la entrada.
+   ===================================================================== */
+const W = 9.86, D = 7.06;          // interior de la vivienda (plano acotado)
+const H = 2.5, H_LOW = 1.0;        // altura de paredes normal / modo "paredes bajas"
+const EXT = 0.25, INT = 0.1;       // grosor de muros exteriores / tabiques
+
+// light: entidad que se enciende/apaga al tocar la habitación (null = sin luz)
+const ROOMS = [
+  { id:'hab1',     name:'Dormitorio principal', floor:'wood',  light:'light.dormitorio',       label:[1.35,0.55], rects:[[0,2.7,0,3.0],[1.7,2.7,3.0,5.24]] },
+  { id:'vestidor', name:'Vestidor',             floor:'wood',  light:null,                     label:[0.95,4.1],  rects:[[0,1.7,3.0,5.24]] },
+  { id:'hab2',     name:'Habitación de Naya',   floor:'wood',  light:'light.habitacion_naya',  label:[3.8,2.2],   rects:[[2.7,4.88,0,3.0]] },
+  { id:'hab3',     name:'Zona de trabajo',      floor:'wood',  light:'light.zona_trabajo',     label:[5.5,1.5],   rects:[[4.88,7.0,0,3.2]] },
+  { id:'cocina',   name:'Cocina',               floor:'tile',  light:'light.cocina',           label:[8.6,1.3],   rects:[[7.0,9.86,0,3.2]] },
+  { id:'salon',    name:'Salón',                floor:'wood',  light:'light.salon',            label:[8.4,5.0],   rects:[[7.0,9.86,3.2,7.06],[6.1,7.0,4.19,7.06]] },
+  { id:'recibidor',name:'Recibidor',            floor:'wood',  light:'light.recibidor',        label:[5.55,6.3],  rects:[[4.98,6.1,4.19,7.06]] },
+  { id:'pasillo',  name:'Pasillo',              floor:'wood',  light:'light.pasillo',          label:[4.4,3.65],  rects:[[2.7,4.88,3.0,4.19],[4.88,7.0,3.2,4.19]] },
+  { id:'bano1',    name:'Baño 1',               floor:'tile',  light:'light.bano_1',           label:[4.0,4.95],  rects:[[2.7,4.98,4.19,5.84]] },
+  { id:'lavadero', name:'Lavadero',             floor:'tile2', light:null,                     label:[3.9,6.1],   rects:[[2.7,4.98,5.84,7.06]] },
+  { id:'bano2',    name:'Baño 2',               floor:'tile',  light:'light.bano_2',           label:[1.0,6.2],   rects:[[0,2.7,5.24,7.06]] },
+  { id:'terraza',  name:'Terraza',              floor:'pave',  light:'light.terraza',          label:[3.0,-3.2],  rects:[[-EXT,W+1.5,-6.5,-EXT],[W+EXT,W+1.5,-EXT,D+EXT]], outside:true },
+];
+
+// tap: 'toggle' (encender/apagar) o 'more-info' (abre el detalle de HA). Mantener pulsado = siempre detalle.
+// sub: texto secundario → 'attr:nombre_atributo' o el id de otra entidad (p. ej. un sensor de potencia)
+const DEVICES = [
+  { name:'TV LG',          icon:'📺', entity:'media_player.lg_webos_tv',  pos:[8.45,6.85,1.55], tap:'more-info' },
+  { name:'Sonos Beam',     icon:'🔊', entity:'media_player.sonos_beam',   pos:[7.7,6.8,0.7],    tap:'more-info' },
+  { name:'Chromecast',     icon:'📡', entity:'media_player.chromecast',   pos:[9.3,6.8,0.7],    tap:'more-info' },
+  { name:'Termo Ariston',  icon:'♨️', entity:'water_heater.ariston',      pos:[4.6,6.75,1.8],   tap:'more-info', sub:'attr:current_temperature', unit:'°C' },
+  { name:'Cargador V2C',   icon:'🔌', entity:'switch.v2c_trydan_carga',   pos:[9.5,-0.6,1.4],   tap:'more-info', sub:'sensor.v2c_trydan_potencia_carga' },
+  { name:'Altavoz IKEA 1', icon:'🎵', entity:'media_player.ikea_1',       pos:[8.3,0.35,1.2],   tap:'more-info' },
+  { name:'Altavoz IKEA 2', icon:'🎵', entity:'media_player.ikea_2',       pos:[5.4,2.9,1.0],    tap:'more-info' },
+];
+
+// Muros: a/b = extremos del eje del muro [x,z]; gaps = huecos [desde, hasta, 'door'|'window'|'open']
+const WALLS = [
+  // --- exteriores ---
+  { a:[-EXT,-EXT/2], b:[W+EXT,-EXT/2], t:EXT, gaps:[[0.597,1.997,'door'],[3.508,4.708,'window'],[5.247,6.447,'window'],[7.934,9.134,'door']] },
+  { a:[-EXT,D+EXT/2], b:[W+EXT,D+EXT/2], t:EXT, gaps:[[5.25,6.15,'door']] },
+  { a:[-EXT/2,0], b:[-EXT/2,D], t:EXT },
+  { a:[W+EXT/2,0], b:[W+EXT/2,D], t:EXT, gaps:[[2.0,2.75,'window'],[2.8,3.6,'door'],[5.3,6.6,'door']] },
+  // --- tabiques ---
+  { a:[2.7,0],   b:[2.7,3.0] },                                   // hab1 | hab2
+  { a:[4.88,0],  b:[4.88,3.2] },                                  // hab2 | hab3
+  { a:[7.0,0],   b:[7.0,4.19] },                                  // hab3 + pasillo | cocina/salón
+  { a:[2.7,3.0], b:[4.88,3.0], gaps:[[4.0,4.8,'door']] },         // puerta hab2
+  { a:[4.88,3.2],b:[7.0,3.2],  gaps:[[5.0,5.8,'door']] },         // puerta hab3
+  { a:[2.7,3.0], b:[2.7,5.24], gaps:[[3.25,4.05,'door']] },       // puerta suite
+  { a:[2.7,5.24],b:[2.7,D] },                                     // baño2 | lavadero
+  { a:[0,5.24],  b:[2.7,5.24], gaps:[[1.85,2.6,'door']] },        // puerta baño 2
+  { a:[1.7,3.0], b:[1.7,5.24], gaps:[[3.6,4.6,'open']] },         // vestidor
+  { a:[2.7,4.19],b:[7.0,4.19], gaps:[[4.15,4.85,'door'],[5.2,6.0,'door']] }, // baño1 / pasillo-recibidor
+  { a:[2.7,5.84],b:[4.98,5.84] },                                 // baño1 | lavadero
+  { a:[4.98,4.19],b:[4.98,D],  gaps:[[6.1,6.9,'door']] },         // puerta lavadero
+];
+
+// Mobiliario: [x1,x2,z1,z2,alto,color,(y inicial)]
+const C = { bed:0xece8e0, wood:0x8b6b4a, ward:0xb09070, sofa:0x6d7a8a, white:0xf6f6f6, counter:0xdedede, black:0x151515, steel:0xb8bcc0 };
+const FURNITURE = [
+  [0.05,2.05,0.85,2.4,0.5,C.bed],[0,0.08,0.85,2.4,1.0,C.wood],[0.05,0.5,0.35,0.78,0.5,C.wood],[0.05,0.5,2.47,2.9,0.5,C.wood],
+  [0,0.6,3.05,5.2,2.2,C.ward],
+  [2.85,3.75,0.1,2.0,0.45,C.bed],[2.8,4.0,2.4,2.95,0.75,C.wood],
+  [6.05,6.95,0.1,2.0,0.45,C.bed],[5.0,6.0,2.6,3.15,0.75,C.wood],
+  [7.05,7.7,0,0.65,1.85,C.steel],[7.7,9.86,0,0.6,0.9,C.counter],[9.26,9.86,0.6,2.6,0.9,C.counter],[7.3,8.1,1.8,2.9,0.75,C.wood],
+  [8.1,9.5,3.9,4.45,0.8,C.sofa],[7.1,7.65,5.0,6.3,0.8,C.sofa],[8.3,9.0,5.4,6.0,0.4,C.wood],[7.3,9.5,6.7,7.04,0.5,C.wood],[7.9,9.0,6.95,7.0,0.65,C.black,0.6],
+  [5.02,5.35,4.3,5.6,0.9,C.ward],
+  [2.75,3.45,4.25,5.8,0.55,C.white],[3.6,4.0,5.35,5.8,0.45,C.white],[4.3,4.92,5.35,5.8,0.85,C.white],
+  [2.05,2.65,6.4,7.0,0.08,C.white],[1.1,1.5,6.55,7.0,0.45,C.white],[1.1,1.7,5.3,5.7,0.85,C.white],
+  [2.75,3.35,6.0,6.55,0.85,C.white],[2.75,3.35,6.55,7.02,0.85,C.counter],
+];
+
+/* =====================================================================
+   CONEXIÓN CON HOME ASSISTANT
+   1) Dentro del dashboard (iframe en /local/...) usa la sesión de HA.
+   2) Alternativa: ?token=TOKEN_LARGA_DURACION → WebSocket propio.
+   3) Fuera de HA → modo demo.
+   ===================================================================== */
+const params = new URLSearchParams(location.search);
+if (params.get('bg') === 'transparent') document.body.classList.add('transparent');
+
+function haEl(){ try { return window.parent !== window ? window.parent.document.querySelector('home-assistant') : null; } catch(e){ return null; } }
+function parentHass(){ const el = haEl(); return el && el.hass ? el.hass : null; }
+
+let ws = null, wsStates = {}, wsId = 1, wsStatesReq = 0, wsReady = false;
+function connectWS(token){
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/websocket');
+  ws.onmessage = ev => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'auth_required') ws.send(JSON.stringify({ type:'auth', access_token:token }));
+    else if (m.type === 'auth_invalid') toast('Token de Home Assistant no válido');
+    else if (m.type === 'auth_ok'){
+      wsReady = true; wsStatesReq = wsId;
+      wsSend({ type:'get_states' }); wsSend({ type:'subscribe_events', event_type:'state_changed' });
+    }
+    else if (m.type === 'result' && m.id === wsStatesReq && m.success){ m.result.forEach(s => wsStates[s.entity_id] = s); refresh(); }
+    else if (m.type === 'event'){ const d = m.event.data; if (d.new_state) wsStates[d.entity_id] = d.new_state; else delete wsStates[d.entity_id]; refresh(); }
+  };
+  ws.onclose = () => { wsReady = false; setTimeout(() => connectWS(token), 5000); };
+}
+function wsSend(msg){ msg.id = wsId++; ws.send(JSON.stringify(msg)); }
+if (!parentHass() && params.get('token')) connectWS(params.get('token'));
+
+function mode(){ return parentHass() ? 'hass' : (wsReady ? 'ws' : 'demo'); }
+
+// Estados de demostración
+const DEMO = {};
+[...ROOMS.map(r => r.light), ...DEVICES.map(d => d.entity), ...DEVICES.map(d => d.sub)].forEach(id => {
+  if (id && id.includes('.') && !id.startsWith('attr:')) DEMO[id] = { state:'off', attributes:{} };
+});
+DEMO['light.salon'] = { state:'on', attributes:{} };
+DEMO['media_player.lg_webos_tv'] = { state:'on', attributes:{} };
+DEMO['water_heater.ariston'] = { state:'eco', attributes:{ current_temperature:52 } };
+DEMO['sensor.v2c_trydan_potencia_carga'] = { state:'0', attributes:{ unit_of_measurement:'kW' } };
+
+function getState(id){
+  if (!id) return null;
+  const m = mode();
+  if (m === 'hass') return parentHass().states[id] || null;
+  if (m === 'ws') return wsStates[id] || null;
+  return DEMO[id] || null;
+}
+const OFF = ['off','unavailable','unknown','standby','idle','closed','not_home','none'];
+function isOn(s){
+  if (!s) return false;
+  const n = parseFloat(s.state);
+  if (!isNaN(n)) return n > 0;
+  return !OFF.includes(s.state);
+}
+const ES = { on:'Encendido', off:'Apagado', playing:'Reproduciendo', paused:'En pausa', idle:'Inactivo', standby:'En espera',
+  unavailable:'No disponible', unknown:'Desconocido', heating:'Calentando', eco:'Eco', electric:'Eléctrico',
+  heat_pump:'Bomba de calor', performance:'Rendimiento', charging:'Cargando', buffering:'Cargando…' };
+const tr = s => ES[s] || s;
+
+const TOGGLE_DOMAINS = ['light','switch','fan','input_boolean','media_player'];
+function action(entity, kind, label){
+  if (!entity) return;
+  const domain = entity.split('.')[0];
+  if (kind === 'toggle' && !TOGGLE_DOMAINS.includes(domain)) kind = 'more-info';
+  const m = mode();
+  if (kind === 'more-info'){
+    if (m === 'hass'){
+      haEl().dispatchEvent(new CustomEvent('hass-more-info', { bubbles:true, composed:true, detail:{ entityId:entity } }));
+    } else {
+      const s = getState(entity);
+      toast(`${label}: ${s ? tr(s.state) : 'no encontrado'}` + (m === 'demo' ? ' · (demo: en HA se abriría el detalle)' : ''));
+    }
+    return;
+  }
+  if (m === 'hass') parentHass().callService(domain, 'toggle', { entity_id:entity });
+  else if (m === 'ws') wsSend({ type:'call_service', domain, service:'toggle', service_data:{ entity_id:entity } });
+  else {
+    const s = DEMO[entity] || (DEMO[entity] = { state:'off', attributes:{} });
+    s.state = isOn(s) ? 'off' : 'on';
+    refresh();
+  }
+}
+
+/* =====================================================================
+   ESCENA 3D
+   ===================================================================== */
+const app = document.getElementById('app');
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+const labelR = new CSS2DRenderer();
+labelR.domElement.className = 'labels';
+app.appendChild(labelR.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI * 0.48;
+controls.minDistance = 4;
+controls.maxDistance = 40;
+
+scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3a3a, 1.15));
+const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+sun.position.set(7, 15, 9);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left:-13, right:13, top:13, bottom:-13 });
+sun.shadow.bias = -0.0005;
+scene.add(sun);
+
+const house = new THREE.Group();
+house.position.set(-W / 2, 0, -D / 2);
+scene.add(house);
+
+// suelo general
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ color:0x2b322b, roughness:1 }));
+ground.rotation.x = -Math.PI / 2; ground.position.y = -0.07; ground.receiveShadow = true;
+scene.add(ground);
+
+const FLOOR = { wood:0xc9a47c, tile:0xd8dcdf, tile2:0xcdd5cf, pave:0x9c978f };
+const wallMat  = new THREE.MeshStandardMaterial({ color:0xf1ede6, roughness:0.9 });
+const glassMat = new THREE.MeshStandardMaterial({ color:0x8fcfff, transparent:true, opacity:0.35, roughness:0.1 });
+
+function box(x1, x2, z1, z2, h, color, y0 = 0, parent = house, mat){
+  const m = new THREE.Mesh(new THREE.BoxGeometry(x2 - x1, h, z2 - z1), mat || new THREE.MeshStandardMaterial({ color, roughness:0.8 }));
+  m.position.set((x1 + x2) / 2, y0 + h / 2, (z1 + z2) / 2);
+  m.castShadow = m.receiveShadow = true;
+  parent.add(m);
+  return m;
+}
+
+// --- suelos de habitaciones + etiquetas ---
+for (const r of ROOMS){
+  r.mat = new THREE.MeshStandardMaterial({ color:FLOOR[r.floor], roughness:0.85 });
+  for (const [x1, x2, z1, z2] of r.rects) {
+    const m = box(x1, x2, z1, z2, 0.04, 0, r.outside ? -0.06 : 0, house, r.mat);
+    m.castShadow = false;
+  }
+  const el = document.createElement('div');
+  el.className = 'room' + (r.light ? '' : ' nolight');
+  el.textContent = r.name;
+  r.el = el;
+  if (r.light) bindPress(el, () => action(r.light, 'toggle', r.name), () => action(r.light, 'more-info', r.name));
+  const obj = new CSS2DObject(el);
+  obj.position.set(r.label[0], 0.15, r.label[1]);
+  house.add(obj);
+}
+
+// --- muros (se reconstruyen al cambiar la altura) ---
+const wallGroup = new THREE.Group();
+house.add(wallGroup);
+function buildWalls(h){
+  wallGroup.children.forEach(c => c.geometry.dispose());
+  wallGroup.clear();
+  for (const w of WALLS){
+    const t = w.t || INT;
+    const horiz = w.a[1] === w.b[1];
+    const s = horiz ? Math.min(w.a[0], w.b[0]) : Math.min(w.a[1], w.b[1]);
+    const e = horiz ? Math.max(w.a[0], w.b[0]) : Math.max(w.a[1], w.b[1]);
+    const fixed = horiz ? w.a[1] : w.a[0];
+    const seg = (a, b, y0, y1, mat = wallMat, th = t) => {
+      if (b - a < 0.001 || y1 - y0 < 0.001) return;
+      if (horiz) box(a, b, fixed - th / 2, fixed + th / 2, y1 - y0, 0, y0, wallGroup, mat);
+      else       box(fixed - th / 2, fixed + th / 2, a, b, y1 - y0, 0, y0, wallGroup, mat);
+    };
+    let cur = s;
+    for (const [g0, g1, type] of (w.gaps || []).slice().sort((p, q) => p[0] - q[0])){
+      seg(cur, g0, 0, h);
+      if (type === 'window'){
+        seg(g0, g1, 0, Math.min(0.9, h));
+        if (h > 0.9) seg(g0, g1, 0.9, Math.min(2.1, h), glassMat, 0.03);
+        if (h > 2.1) seg(g0, g1, 2.1, h);
+      } else if (type === 'door'){
+        if (h > 2.1) seg(g0, g1, 2.1, h);
+      }
+      cur = g1;
+    }
+    seg(cur, e, 0, h);
+  }
+}
+let lowWalls = false;
+buildWalls(H);
+
+// --- mobiliario ---
+for (const [x1, x2, z1, z2, h, c, y0] of FURNITURE) box(x1, x2, z1, z2, h, c, y0 || 0);
+// termo Ariston (cilindro en el lavadero)
+const termo = new THREE.Mesh(new THREE.CylinderGeometry(0.27, 0.27, 1.25, 24), new THREE.MeshStandardMaterial({ color:0xfafafa, roughness:0.4 }));
+termo.position.set(4.6, 0.3 + 0.625, 6.75); termo.castShadow = true; house.add(termo);
+// cargador V2C en la fachada
+box(9.35, 9.65, -0.33, -0.25, 0.4, 0x222222, 1.0);
+
+// --- coche en la plaza de la terraza ---
+const car = new THREE.Group();
+box(-2.15, 2.15, -0.9, 0.9, 0.7, 0xdedede, 0.15, car);
+box(-1.0, 1.0, -0.8, 0.8, 0.5, 0x2f3a45, 0.85, car);
+[[-1.4,-0.92],[1.4,-0.92],[-1.4,0.92],[1.4,0.92]].forEach(([x, z]) => {
+  const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.22, 18), new THREE.MeshStandardMaterial({ color:0x111111 }));
+  wh.rotation.x = Math.PI / 2; wh.position.set(x, 0.32, z); car.add(wh);
+});
+car.position.set(8.4, -0.06, -2.7); car.rotation.y = 0.15;
+house.add(car);
+// línea de la plaza de aparcamiento
+const pk = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(
+  [[-2.7,-1.4],[2.7,-1.4],[2.7,1.4],[-2.7,1.4]].map(([x, z]) => new THREE.Vector3(x, 0, z))),
+  new THREE.LineDashedMaterial({ color:0xffffff, dashSize:0.25, gapSize:0.18 }));
+pk.computeLineDistances(); pk.position.set(8.4, 0.0, -2.7); pk.rotation.y = 0.15; house.add(pk);
+
+// --- jardinera lateral ---
+box(W + 1.5, W + 2.3, 0.3, D + 0.2, 0.3, 0x5b3d2a, -0.06);
+for (let z = 0.8; z < D; z += 0.9){
+  const b = new THREE.Mesh(new THREE.SphereGeometry(0.32 + Math.random() * 0.12, 12, 10),
+    new THREE.MeshStandardMaterial({ color: z % 1.8 < 0.9 ? 0x3f8f3a : 0xb8322c, roughness:1 }));
+  b.position.set(W + 1.9, 0.45, z); b.castShadow = true; house.add(b);
+}
+
+// --- dispositivos ---
+for (const d of DEVICES){
+  const el = document.createElement('div');
+  el.className = 'dev';
+  el.innerHTML = `<span class="ic">${d.icon}</span><span class="txt"><b>${d.name}</b><small>—</small></span>`;
+  d.el = el; d.small = el.querySelector('small');
+  bindPress(el, () => action(d.entity, d.tap || 'more-info', d.name), () => action(d.entity, 'more-info', d.name));
+  const obj = new CSS2DObject(el);
+  obj.position.set(d.pos[0], d.pos[2], d.pos[1]);
+  house.add(obj);
+}
+
+/* =====================================================================
+   ACTUALIZACIÓN DE ESTADOS
+   ===================================================================== */
+const WARM = new THREE.Color(0x7a5212), BLACK = new THREE.Color(0x000000);
+function refresh(){
+  for (const r of ROOMS){
+    if (!r.light) continue;
+    const s = getState(r.light), on = isOn(s);
+    r.el.classList.toggle('on', on);
+    r.el.classList.toggle('missing', !s);
+    r.el.title = s ? '' : `No existe ${r.light}`;
+    r.mat.emissive.copy(on ? WARM : BLACK);
+  }
+  for (const d of DEVICES){
+    const s = getState(d.entity);
+    d.el.classList.toggle('on', isOn(s));
+    d.el.classList.toggle('missing', !s);
+    let txt = s ? tr(s.state) : 'No encontrado';
+    if (s && d.sub){
+      if (d.sub.startsWith('attr:')){
+        const v = s.attributes[d.sub.slice(5)];
+        if (v !== undefined) txt += ` · ${v}${d.unit || ''}`;
+      } else {
+        const ss = getState(d.sub);
+        if (ss) txt += ` · ${ss.state} ${ss.attributes.unit_of_measurement || ''}`;
+      }
+    }
+    d.small.textContent = txt;
+  }
+  const m = mode();
+  document.getElementById('status').textContent =
+    m === 'hass' ? '' : m === 'ws' ? 'Conectado por token' : 'Modo demo (fuera de Home Assistant)';
+}
+setInterval(refresh, 1000);
+refresh();
+
+/* =====================================================================
+   INTERFAZ
+   ===================================================================== */
+function bindPress(el, onTap, onHold){
+  let t = null, held = false, sx = 0, sy = 0;
+  el.addEventListener('pointerdown', e => {
+    e.stopPropagation(); held = false; sx = e.clientX; sy = e.clientY;
+    t = setTimeout(() => { held = true; t = null; onHold(); }, 550);
+  });
+  el.addEventListener('pointermove', e => { if (t && Math.hypot(e.clientX - sx, e.clientY - sy) > 10){ clearTimeout(t); t = null; } });
+  el.addEventListener('pointerup', e => { e.stopPropagation(); if (t){ clearTimeout(t); t = null; if (!held) onTap(); } });
+  el.addEventListener('pointercancel', () => { if (t){ clearTimeout(t); t = null; } });
+  el.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+let toastTimer;
+function toast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+const TARGET = new THREE.Vector3(0.9, 0, -1.6);
+function setView(v){
+  const a = app.clientWidth / Math.max(app.clientHeight, 1);
+  const k = Math.max(1, 0.9 / a);
+  controls.target.copy(TARGET);
+  if (v === 'top') camera.position.set(TARGET.x, 17.5 * k, TARGET.z + 0.01);
+  else camera.position.set(TARGET.x + 4.5 * k, 10.5 * k, TARGET.z + 11.5 * k);
+  controls.update();
+  document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('sel', b.dataset.view === v));
+}
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => setView(b.dataset.view));
+document.getElementById('btnWalls').onclick = e => {
+  lowWalls = !lowWalls; buildWalls(lowWalls ? H_LOW : H);
+  e.target.textContent = lowWalls ? 'Paredes altas' : 'Paredes bajas';
+};
+document.getElementById('btnNames').onclick = e => {
+  const c = document.body.classList.toggle('compact');
+  e.target.textContent = c ? 'Mostrar nombres' : 'Ocultar nombres';
+};
+
+function resize(){
+  const w = app.clientWidth, h = app.clientHeight;
+  camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix();
+  renderer.setSize(w, h); labelR.setSize(w, h);
+}
+window.addEventListener('resize', resize);
+resize();
+setView(params.get('view') === 'top' ? 'top' : '3d');
+if (params.get('walls') === 'low') document.getElementById('btnWalls').click();
+
+renderer.setAnimationLoop(() => {
+  if (document.hidden) return;
+  controls.update();
+  renderer.render(scene, camera);
+  labelR.render(scene, camera);
+});
+</script>
+</body>
+</html>
